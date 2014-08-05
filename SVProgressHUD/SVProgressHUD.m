@@ -205,9 +205,17 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
         
         SVProgressHUDBackgroundColor = [UIColor whiteColor];
         SVProgressHUDForegroundColor = [UIColor blackColor];
-        SVProgressHUDFont = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
-        SVProgressHUDSuccessImage = [[UIImage imageNamed:@"SVProgressHUD.bundle/success"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-        SVProgressHUDErrorImage = [[UIImage imageNamed:@"SVProgressHUD.bundle/error"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        
+        if ([UIImage respondsToSelector:@selector(imageWithRenderingMode:)]) {
+            SVProgressHUDSuccessImage = [[UIImage imageNamed:@"SVProgressHUD.bundle/success"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+            SVProgressHUDErrorImage = [[UIImage imageNamed:@"SVProgressHUD.bundle/error"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+            SVProgressHUDFont = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+        } else {
+            // iOS 6 fallback: insert code to convert imaged if needed
+            SVProgressHUDSuccessImage = [UIImage imageNamed:@"SVProgressHUD.bundle/success"] ;
+            SVProgressHUDErrorImage = [UIImage imageNamed:@"SVProgressHUD.bundle/error"];
+        }
+        
         SVProgressHUDRingThickness = 4;
     }
 	
@@ -384,6 +392,7 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
     double animationDuration;
     
     UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
+    BOOL ignoreOrientation = [[NSProcessInfo processInfo] respondsToSelector:@selector(operatingSystemVersion)];
     
     if(notification) {
         NSDictionary* keyboardInfo = [notification userInfo];
@@ -391,7 +400,7 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
         animationDuration = [[keyboardInfo valueForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
         
         if(notification.name == UIKeyboardWillShowNotification || notification.name == UIKeyboardDidShowNotification) {
-            if(UIInterfaceOrientationIsPortrait(orientation))
+            if(ignoreOrientation || UIInterfaceOrientationIsPortrait(orientation))
                 keyboardHeight = keyboardFrame.size.height;
             else
                 keyboardHeight = keyboardFrame.size.width;
@@ -401,10 +410,10 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
         keyboardHeight = self.visibleKeyboardHeight;
     }
     
-    CGRect orientationFrame = [UIScreen mainScreen].bounds;
+    CGRect orientationFrame = self.window.bounds;
     CGRect statusBarFrame = [UIApplication sharedApplication].statusBarFrame;
     
-    if(UIInterfaceOrientationIsLandscape(orientation)) {
+    if(!ignoreOrientation && UIInterfaceOrientationIsLandscape(orientation)) {
         float temp = orientationFrame.size.width;
         orientationFrame.size.width = orientationFrame.size.height;
         orientationFrame.size.height = temp;
@@ -426,25 +435,29 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
     CGPoint newCenter;
     CGFloat rotateAngle;
     
-    switch (orientation) {
-        case UIInterfaceOrientationPortraitUpsideDown:
-            rotateAngle = M_PI;
-            newCenter = CGPointMake(posX, orientationFrame.size.height-posY);
-            break;
-        case UIInterfaceOrientationLandscapeLeft:
-            rotateAngle = -M_PI/2.0f;
-            newCenter = CGPointMake(posY, posX);
-            break;
-        case UIInterfaceOrientationLandscapeRight:
-            rotateAngle = M_PI/2.0f;
-            newCenter = CGPointMake(orientationFrame.size.height-posY, posX);
-            break;
-        default: // as UIInterfaceOrientationPortrait
-            rotateAngle = 0.0;
-            newCenter = CGPointMake(posX, posY);
-            break;
+    if (ignoreOrientation) {
+        rotateAngle = 0.0;
+        newCenter = CGPointMake(posX, posY);
+    } else {
+        switch (orientation) {
+            case UIInterfaceOrientationPortraitUpsideDown:
+                rotateAngle = M_PI;
+                newCenter = CGPointMake(posX, orientationFrame.size.height-posY);
+                break;
+            case UIInterfaceOrientationLandscapeLeft:
+                rotateAngle = -M_PI/2.0f;
+                newCenter = CGPointMake(posY, posX);
+                break;
+            case UIInterfaceOrientationLandscapeRight:
+                rotateAngle = M_PI/2.0f;
+                newCenter = CGPointMake(orientationFrame.size.height-posY, posX);
+                break;
+            default: // as UIInterfaceOrientationPortrait
+                rotateAngle = 0.0;
+                newCenter = CGPointMake(posX, posY);
+                break;
+        }
     }
-    
     if(notification) {
         [UIView animateWithDuration:animationDuration
                               delay:0
@@ -457,7 +470,6 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
     else {
         [self moveToPoint:newCenter rotateAngle:rotateAngle];
     }
-    
 }
 
 - (void)moveToPoint:(CGPoint)newCenter rotateAngle:(CGFloat)angle {
@@ -761,8 +773,11 @@ static const CGFloat SVProgressHUDParallaxDepthPoints = 10;
         effectY.minimumRelativeValue = @(-SVProgressHUDParallaxDepthPoints);
         effectY.maximumRelativeValue = @(SVProgressHUDParallaxDepthPoints);
         
-        [_hudView addMotionEffect: effectX];
-        [_hudView addMotionEffect: effectY];
+        if([_hudView respondsToSelector:@selector(addMotionEffect:)])
+        {
+            [_hudView addMotionEffect: effectX];
+            [_hudView addMotionEffect: effectY];
+        }
         
         [self addSubview:_hudView];
     }
